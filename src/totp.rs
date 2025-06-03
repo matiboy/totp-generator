@@ -2,7 +2,9 @@ use std::{fmt, time::{SystemTime, UNIX_EPOCH}};
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use base32::{Alphabet, decode};
+use serde::Serialize;
 
+#[derive(Serialize, Debug)]
 pub struct Totp {
     pub timestamp: u64,
     pub valid_until: u64,
