@@ -25,7 +25,7 @@ async fn main()-> std::io::Result<()> {
     }
     let unlock_password = env::var("UNLOCK_PASSWORD").ok();
     // Default to console UI
-    let state = State::default(args.secrets.clone(), unlock_password, args.lock_after);
+    let state = State::default(args.secrets.clone(), unlock_password, args.lock_after, args.number_style);
     if let Err(err) = start_console_ui(state, 1).await {
         eprintln!("Error rendering UI {}", err);
     } else {

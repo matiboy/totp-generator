@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "4", features = ["derive"] } # for command-line parsing
+clap = { version = "4", features = ["derive", "env"] } # for command-line parsing
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0"
@@ -13,3 +13,9 @@ hmac = "0.12"
 sha1 = "0.10"
 base32 = "0.4"
 actix-web = "4" # for HTTP server
+crossterm = "0.27"
+ratatui = "0.26"
+rand = "0.9.1"
+tokio = { version = "1.37", features = ["full"] }
+atty = "0.2"
+copypasta = "0.10.2"

@@ -1,4 +1,4 @@
-use actix_web::{get, http::header::{self, Accept, QualityItem}, mime, web, App, HttpResponse, HttpResponseBuilder, HttpServer, Responder};
+use actix_web::{get, http::header::{self, Accept}, mime, web, App, HttpResponse, HttpResponseBuilder, HttpServer, Responder};
 use crate::{config::secrets::get_secret, load_secrets, totp::{generate_totp, Totp}};
 
 #[get("/list")]

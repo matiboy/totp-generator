@@ -1,4 +1,12 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, ValueEnum};
+
+#[derive(Clone, ValueEnum, PartialEq, Eq)]
+pub enum NumberStyle {
+    Standard,
+    Pipe,
+    Lite,
+    Utf8,
+}
 
 #[derive(Parser)]
 pub struct Args {
@@ -11,5 +19,7 @@ pub struct Args {
     #[arg(short, long, default_value = "3000")]
     pub port: u16, // default to 3000
     #[arg(short, long, default_value = "300", help="Time in seconds before locking the user interface; set it to 0 to disable")]
-    pub lock_after: u8,
+    pub lock_after: u16,
+    #[arg(long, value_enum, default_value_t = NumberStyle::Standard, help="One of standard, pipe or lite")]
+    pub number_style: NumberStyle,
 }
