@@ -1,38 +1,51 @@
-use copypasta::{ClipboardContext, ClipboardProvider};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, EventStream};
 use ratatui::{
-    Frame, Terminal,
     backend::Backend,
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
+    Frame, Terminal,
 };
-use std::{
-    io,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{io, time::SystemTime};
 use tokio::time::{self, Duration};
+use tokio_stream::StreamExt;
 
 use crate::{
-    config::secrets::{ConfigEntry, load_secrets},
+    config::secrets::{load_secrets, ConfigEntry},
+    output::cui::input::keyboard::KeyboardAction,
     state::State,
 };
 
-use super::components::totp_box::TotpBox;
+use super::components::{messages::Messages, totp_box::TotpBox};
 
 pub struct App {
-    totps: Vec<TotpBox>,
-    refresh_rate: u8,
-    state: State,
+    pub totps: Vec<TotpBox>,
+    pub state: State,
+    messages: Messages,
 }
 
 impl App {
-    pub fn new(state: State, refresh_rate: u8) -> App {
+    pub fn new(state: State) -> App {
         App {
             totps: vec![],
             state,
-            refresh_rate,
+            messages: Messages::new(),
+        }
+    }
+
+    pub fn add_message(&mut self, message: String) {
+        self.messages.push(message);
+    }
+
+    pub async fn totp_changed(&mut self) {
+        let mut interval = time::interval(Duration::from_millis(50));
+        interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
+        loop {
+            interval.tick().await;
+            if self.update_totps() {
+                break;
+            }
         }
     }
 
@@ -44,7 +57,7 @@ impl App {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Percentage(45), // top padding
-                Constraint::Min(1),         // centered content
+                Constraint::Min(3),         // centered content
                 Constraint::Percentage(45), // bottom padding
             ])
             .split(area);
@@ -58,11 +71,11 @@ impl App {
                 Span::styled(
                     "*".repeat(self.state.buffer.len()),
                     Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
                 ),
             ]
-                .into()
+            .into()
         };
         let paragraph = Paragraph::new(lines)
             .block(block)
@@ -81,9 +94,9 @@ impl App {
                     return self.render(frame);
                 }
             }
-            self.render_totps(frame);
+            self.render_normal_screen(frame);
         } else {
-            return self.render_locked_screen(frame);
+            self.render_locked_screen(frame)
         }
     }
 
@@ -93,11 +106,14 @@ impl App {
         let c = vec![Constraint::Ratio(1, c.into()); c.into()];
         (r, c)
     }
-
-    fn render_totps(&mut self, frame: &mut Frame) {
-        let size = frame.size();
+    fn render_normal_screen(&mut self, frame: &mut Frame) {
+        let [messages_row, totps_row]: [Rect; 2] = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(frame.size());
+        self.render_totps(totps_row, frame);
+        frame.render_widget(Paragraph::new(self.messages.last()), messages_row);
+    }
+    fn render_totps(&mut self, rect: Rect, frame: &mut Frame) {
         let (row_constraint, col_constraint) = self.get_row_and_column_constraints();
-        let rows = Layout::vertical(&row_constraint).split(size);
+        let rows = Layout::vertical(&row_constraint).split(rect);
 
         let mut totps = self.totps.iter();
         let mut i: u8 = 0;
@@ -120,68 +136,16 @@ impl App {
         }
     }
 
-    fn is_locked(&self) -> bool {
+    pub fn is_locked(&self) -> bool {
         self.state.unlocked_since.is_none()
     }
 
-    fn unlock(&mut self) {
+    pub fn unlock(&mut self) {
         self.state.unlocked_since = Some(SystemTime::now());
     }
 
-    fn lock(&mut self) {
+    pub fn lock(&mut self) {
         self.state.unlocked_since = None;
-    }
-
-    pub fn handle_key(&mut self, key: KeyEvent) -> Option<&str> {
-        let (code, modifiers) = (key.code, key.modifiers);
-        eprintln!("Key event received {:?} ", code);
-        if self.is_locked() {
-            let mut should_unlock = false;
-            let buffer = &mut self.state.buffer;
-            if let Some(password) = self.state.lock_password.clone() {
-                if code == KeyCode::Enter {
-                    should_unlock = *buffer == password;
-                    buffer.clear();
-                } else if code == KeyCode::Backspace {
-                    buffer.pop();
-                } else if modifiers.is_empty() || modifiers == KeyModifiers::SHIFT {
-                    if let Some(ch) = keyevent_to_char(key) {
-                        buffer.push(ch);
-                    }
-                }
-            } else {
-                // Unlock when no password with any key
-                should_unlock = true;
-            }
-            if should_unlock {
-                self.unlock();
-            }
-            return None;
-        }
-
-        if code == KeyCode::Char('q') {
-            println!("Pressed <q>, Quitting");
-            return Some("Pressed <q>, Quitting");
-        }
-        if code == KeyCode::Char('l') {
-            self.lock();
-            return None;
-        }
-        if let Some(totp) = keyevent_to_char(key)
-            .and_then(char_to_index)
-            .and_then(|i| self.totps.get(i)) 
-        {
-            if let Err(err) = ClipboardContext::new()
-                .and_then(|mut ctx| ctx.set_contents(totp.totp.token.clone())) {
-                eprintln!("Failed to copy to clipboard {}", err);
-            } else {
-                eprintln!("Copied to clipboard");
-            }
-        } else {
-            eprintln!("Character could not be mapped to existing TOTP");
-        }
-
-        None
     }
 
     fn get_secrets_list(&self) -> Vec<ConfigEntry> {
@@ -200,59 +164,73 @@ impl App {
         }
     }
 
-    fn update_totps(&mut self) {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
+    fn update_totps(&mut self) -> bool {
         // Check whether we are locked in the first place
         let secrets = self.get_secrets_list();
+        let mut has_changed = false;
+        if secrets.len() != self.totps.len() {
+            self.totps.truncate(secrets.len());
+            has_changed = true;
+        }
         for (i, entry) in secrets.iter().enumerate() {
             if let Some(existing) = self.totps.get_mut(i) {
                 if entry.code != existing.code {
                     self.totps[i] = TotpBox::from(entry);
-                } else if existing.totp.valid_until <= now {
+                    has_changed = true;
+                } else if existing.needs_refresh() {
                     existing.refresh();
+                    if !has_changed {
+                        // this should log only once
+                        tracing::trace!(?existing.valid_duration_seconds, "some otp needs refresh");
+                    }
+                    has_changed = true;
                 }
             } else {
                 self.totps.insert(i, TotpBox::from(entry));
+                has_changed = true;
             }
         }
+        has_changed
     }
 }
 
 pub async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<()> {
-    let mut interval = time::interval(Duration::from_secs(app.refresh_rate.into()));
+    let mut reader = EventStream::new();
     loop {
         // Draw the UI
         terminal.draw(|f| app.render(f))?;
 
         // Wait for either a tick or a key event
         tokio::select! {
-            _ = interval.tick() => {
-                app.update_totps();
+            _ = app.totp_changed() => {
+                tracing::trace!("Some totp has changed, re-rendering");
             },
-            maybe_event = tokio::task::spawn_blocking(|| event::poll(Duration::from_millis(50))) => {
-                if maybe_event?? {
-                    if let Event::Key(key) = event::read()? {
-                        if let Some(reason) = app.handle_key(key) {
-                            println!("Exited due to {}", reason);
-                            return Ok(())
+            maybe_event = reader.next() => {
+                match maybe_event {
+                    Some(Ok(Event::Key(key_code))) => {
+                        match app.handle_key(key_code) {
+                            KeyboardAction::Exit(reason)=>{
+                                println!("{}",reason);return Ok(())
+                            }
+                            KeyboardAction::Message(m) => {
+                                tracing::info!("{}", m);
+                                app.add_message(m);
+                            },
+                            KeyboardAction::ErrorMessage(m) => {
+                                tracing::warn!("{}", m);
+                                app.add_message(format!("[E] {}", m));
+                            },
+                            KeyboardAction::NoOp => {
+                                tracing::debug!("No op");
+                            },
                         }
+
+                    }
+                    _ => {
+                        tracing::trace!(?maybe_event, "Non key event");
                     }
                 }
             }
         }
     }
-}
-
-fn keyevent_to_char(key_event: KeyEvent) -> Option<char> {
-    match key_event.code {
-        KeyCode::Char(c) => Some(c),
-        _ => None,
-    }
-}
-
-fn char_to_index(ch: char) -> Option<usize> {
-    "0123456789abcdefghijklmnop".find(ch)
 }

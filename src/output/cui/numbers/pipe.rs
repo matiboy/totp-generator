@@ -17,12 +17,12 @@ pub fn big_number_font(input: &str) -> Vec<String> {
 
     for ch in input.chars() {
         if let Some(d) = ch.to_digit(10) {
-            for i in 0..3 {
-                lines[i].push_str(digits[d as usize][i]);
+            for (line, ch) in lines.iter_mut().zip(digits[d as usize]) {
+                line.push_str(ch);
             }
         } else {
-            for i in 0..3 {
-                lines[i].push_str("   ");
+            for line in lines.iter_mut() {
+                line.push_str("   ");
             }
         }
     }

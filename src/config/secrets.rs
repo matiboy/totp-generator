@@ -31,10 +31,9 @@ pub fn load_secrets(secrets_path: &str) -> ConfigFile {
 
 pub fn get_secret(secrets_path: &str, arg: &str) -> Option<ConfigEntry> {
     let config = load_secrets(secrets_path);
-    let entry = if let Ok(index) = arg.parse::<usize>() {
+    if let Ok(index) = arg.parse::<usize>() {
         config.entries.get(index).cloned()
     } else {
         config.entries.iter().find(|e| e.code == arg).cloned()
-    };
-    entry
+    }
 }

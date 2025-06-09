@@ -13,7 +13,7 @@ use crate::state::State;
 
 use super::app::{App, run_app};
 
-pub async fn start_console_ui(state: State, refresh_rate: u8) -> io::Result<()> {
+pub async fn start_console_ui(state: State) -> io::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     crossterm::terminal::enable_raw_mode()?;
@@ -21,7 +21,7 @@ pub async fn start_console_ui(state: State, refresh_rate: u8) -> io::Result<()> 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(state, refresh_rate);
+    let mut app = App::new(state);
 
     let res = run_app(&mut terminal, &mut app).await;
     // Restore terminal

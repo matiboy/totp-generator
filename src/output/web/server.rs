@@ -1,5 +1,5 @@
 use actix_web::{get, http::header::{self, Accept}, mime, web, App, HttpResponse, HttpResponseBuilder, HttpServer, Responder};
-use crate::{config::secrets::get_secret, load_secrets, totp::{generate_totp, Totp}};
+use crate::{config::secrets::get_secret, load_secrets, totp::{Totp}};
 
 #[get("/list")]
 async fn list_entries(secrets_path: web::Data<String>) -> impl Responder {
@@ -23,7 +23,7 @@ async fn get_code(secrets_path: web::Data<String>, path: web::Path<String>, acce
     let code = path.into_inner();
 
     if let Some(entry) = get_secret(secrets_path.as_str(), code.as_str()) {
-        let totp = generate_totp(entry.secret.as_str(), 6, None, None);
+        let totp = Totp::new(entry.secret.as_str(), 6, None);
         let mut builder = HttpResponse::Ok();
         match accept {
             Some(header) => {
