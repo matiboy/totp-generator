@@ -1,4 +1,4 @@
-use clap::{Parser, ValueEnum};
+use clap::{ArgAction, Parser, ValueEnum};
 
 #[derive(Clone, ValueEnum, PartialEq, Eq)]
 pub enum NumberStyle {
@@ -16,6 +16,8 @@ pub struct Args {
     pub one_time: Option<String>, // optional, can be int or code
     #[arg(short, long)]
     pub bind: Option<String>, // optional
+    #[arg(short, long, action=ArgAction::SetTrue)]
+    pub no_console: Option<bool>,
     #[arg(short, long, default_value = "3000")]
     pub port: u16, // default to 3000
     #[arg(short, long, default_value = "300", help="Time in seconds before locking the user interface; set it to 0 to disable")]

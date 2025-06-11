@@ -14,7 +14,7 @@ pub struct Totp {
     counter: u64,
 }
 impl Totp {
-    pub fn new(secret: &str, time_step: u64, digits: Option<u8>) -> Totp {
+    pub fn new(secret: &str, time_step: u16, digits: u8) -> Totp {
         let mut totp = Totp {
             valid_until: 0,
             token: String::new(),
@@ -31,12 +31,12 @@ impl Totp {
                 .as_secs()) as u16
     }
 
-    pub fn needs_refresh(&self, time_step: u64) -> bool {
+    pub fn needs_refresh(&self, time_step: u16) -> bool {
         let new_counter = get_counter(None, time_step);
         new_counter != self.counter
     }
 
-    pub fn refresh(&mut self, secret: &str, time_step: u64, digits: Option<u8>) {
+    pub fn refresh(&mut self, secret: &str, time_step: u16, digits: u8) {
         let (otp, valid_until, counter) = generate_totp(secret, time_step, digits, None);
         self.token = otp;
         self.valid_until = valid_until;
@@ -50,30 +50,30 @@ impl fmt::Display for Totp {
     }
 }
 
-fn get_counter(timestamp: Option<u64>, time_step: u64) -> u64 {
+fn get_counter(timestamp: Option<u64>, time_step: u16) -> u64 {
     let current_time = timestamp.unwrap_or_else(|| {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
     });
-    
+    let time_step = time_step as u64; 
     current_time / time_step
 }
 
 fn generate_totp(
     secret: &str,
-    time_step: u64,
-    digits: Option<u8>,
+    time_step: u16,
+    digits: u8,
     timestamp: Option<u64>,
 ) -> (String, u64, u64) {
-    let digits = digits.unwrap_or(6);
     // Decode Base32 secret
     let secret_bytes =
         decode(Alphabet::RFC4648 { padding: false }, secret).expect("Invalid base32 secret");
 
     // Time counter (moving factor)
     let counter = get_counter(timestamp, time_step);
+    let time_step = time_step as u64;
     let valid_until = (counter + 1) * time_step;
 
     // Convert counter to big-endian byte array
@@ -123,7 +123,7 @@ mod tests {
 
         for (timestamp, expected, expected_valid, expected_counter) in test_cases {
             let (otp, valid, counter) =
-                generate_totp(secret, time_step, Some(digits), Some(timestamp));
+                generate_totp(secret, time_step, digits, Some(timestamp));
             assert_eq!(otp, expected, "Failed for timestamp {}", timestamp);
             assert_eq!(
                 valid, expected_valid,

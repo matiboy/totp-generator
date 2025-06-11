@@ -1,16 +1,15 @@
-
 use ratatui::{
     layout::{Alignment, Constraint, Flex, Layout, Rect},
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Gauge, Paragraph},
     Frame,
 };
 
 use crate::{
     config::{configuration::NumberStyle, secrets::ConfigEntry},
     output::cui::numbers::{pipe::big_number_font, utf8::utf8_font},
-    totp::{Totp},
+    totp::Totp,
 };
 
 #[derive(Debug)]
@@ -19,16 +18,18 @@ pub struct TotpBox {
     pub name: String,
     pub code: String,
     secret: String,
-    pub timestep: u8,
+    pub digits: u8,
+    pub timestep: u16,
     pub valid_duration_seconds: u16,
 }
 
 impl From<&ConfigEntry> for TotpBox {
     fn from(entry: &ConfigEntry) -> Self {
-        let totp = Totp::new(entry.secret.as_str(), entry.timestep.into(), None);
+        let totp = Totp::new(entry.secret.as_str(), entry.timestep, entry.digits);
         TotpBox {
             name: entry.name.clone(),
             code: entry.code.clone(),
+            digits: entry.digits,
             secret: entry.secret.clone(),
             timestep: entry.timestep,
             valid_duration_seconds: totp.valid_duration(),
@@ -41,7 +42,7 @@ impl TotpBox {
     pub fn valid_duration(&self) -> u16 {
         self.totp.valid_duration()
     }
-    
+
     pub fn render(
         totp_box: Option<&TotpBox>,
         frame: &mut Frame,
@@ -57,11 +58,12 @@ impl TotpBox {
         frame.render_widget(block, area);
 
         // 2️⃣ Layout: vertical split
-        let [top_row, second_row, main_row, bottom_row]: [Rect; 4] = Layout::vertical([
+        let [top_row, second_row, main_row, bottom_row, _]: [Rect; 5] = Layout::vertical([
             Constraint::Length(1), // Top row
             Constraint::Length(2), // Second row
             Constraint::Fill(1),   // Center area
-            Constraint::Length(2), // Bottom row
+            Constraint::Length(1), // Bottom row
+            Constraint::Length(1), // Bottom row
         ])
         .areas(area);
 
@@ -74,7 +76,7 @@ impl TotpBox {
         .horizontal_margin(1)
         .areas(top_row);
 
-        let [bottom_cell] = Layout::horizontal([Constraint::Min(3)])
+        let [bottom_cell] = Layout::horizontal([Constraint::Fill(1)])
             .horizontal_margin(2)
             .areas(bottom_row);
         let [second_cell] = Layout::horizontal([Constraint::Length(size.width)])
@@ -116,11 +118,21 @@ impl TotpBox {
                 top_right,
             );
             frame.render_widget(Paragraph::new(t.name.clone()), second_cell);
-            frame.render_widget(
-                Paragraph::new(format!("{}s", t.valid_duration()))
-                    .alignment(Alignment::Right),
-                bottom_cell,
-            );
+            let ratio = t.valid_duration() as f64 / (t.timestep as f64);
+            let validity_label = format!("{}s", t.valid_duration());
+            let validity_widget = Gauge::default()
+                .gauge_style(Style::default().fg(Color::Green))
+                .ratio(ratio)
+                .use_unicode(true)
+                .label(validity_label);
+
+            // TODO: make this configurable whether a bar or a text only
+            // frame.render_widget(
+            //     Paragraph::new(format!("{}s", t.valid_duration()))
+            //         .alignment(Alignment::Right),
+            //     bottom_cell,
+            // );
+            frame.render_widget(validity_widget, bottom_cell);
         }
     }
 
@@ -128,14 +140,16 @@ impl TotpBox {
         self.totp.token.clone()
     }
     pub fn needs_refresh(&mut self) -> bool {
-        self.valid_duration_seconds != self.valid_duration() || self.totp.needs_refresh(self.timestep as u64)
+        self.valid_duration_seconds != self.valid_duration()
+            || self.totp.needs_refresh(self.timestep)
     }
 
     pub fn refresh(&mut self) {
         // Refreshing the box doesn't necessarily mean we refresh the TOTP if it still valid
         self.valid_duration_seconds = self.valid_duration();
-        if self.totp.needs_refresh(self.timestep as u64) {
-            self.totp.refresh(self.secret.as_str(), self.timestep.into(), None);
+        if self.totp.needs_refresh(self.timestep) {
+            self.totp
+                .refresh(self.secret.as_str(), self.timestep, self.digits);
         }
     }
 }

@@ -8,14 +8,20 @@ pub struct ConfigEntry {
     #[serde(skip_serializing)]
     pub secret: String,
     #[serde(default="default_step")]
-    pub timestep: u8,
+    pub timestep: u16,
+    #[serde(default="default_digits", skip_serializing)]
+    pub digits: u8
+}
+
+fn default_digits() -> u8 {
+    6
 }
 
 fn empty_string() -> String {
     "".to_owned()
 }
 
-fn default_step() -> u8 {
+fn default_step() -> u16 {
     30
 }
 

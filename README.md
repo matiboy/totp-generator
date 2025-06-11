@@ -203,10 +203,13 @@ cargo build --release
 
 ## TODO
 
-- [ ] Allow digits to optionally set on secrets
+- [ ] Allow the number of digits (for the TOTP) to be optionally set on secrets in the `TOML` file
 - [ ] Concurrent CUI and HTTP API
-- [ ] Messages
-- [ ] Tracing
+- [ ] Better Messaging with:
+  - [ ] different color for error
+  - [ ] disappearing messages
+  - [ ] tab or floating view to see all messages 
+- [X] Tracing
 
 ## 📃 License
 

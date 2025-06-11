@@ -50,7 +50,7 @@ impl App {
     }
 
     fn render_locked_screen(&self, frame: &mut Frame) {
-        let area = frame.size();
+        let area = frame.area();
 
         // Create a centered layout
         let layout = Layout::default()
@@ -107,7 +107,7 @@ impl App {
         (r, c)
     }
     fn render_normal_screen(&mut self, frame: &mut Frame) {
-        let [messages_row, totps_row]: [Rect; 2] = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(frame.size());
+        let [messages_row, totps_row]: [Rect; 2] = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(frame.area());
         self.render_totps(totps_row, frame);
         frame.render_widget(Paragraph::new(self.messages.last()), messages_row);
     }

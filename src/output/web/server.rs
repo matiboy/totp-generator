@@ -23,7 +23,7 @@ async fn get_code(secrets_path: web::Data<String>, path: web::Path<String>, acce
     let code = path.into_inner();
 
     if let Some(entry) = get_secret(secrets_path.as_str(), code.as_str()) {
-        let totp = Totp::new(entry.secret.as_str(), 6, None);
+        let totp = Totp::new(entry.secret.as_str(), entry.timestep, entry.digits);
         let mut builder = HttpResponse::Ok();
         match accept {
             Some(header) => {
@@ -42,7 +42,7 @@ async fn get_code(secrets_path: web::Data<String>, path: web::Path<String>, acce
 }
 
 // Function to launch the server
-pub async fn start_server(bind: &str, port: u16, secrets_path: String) -> std::io::Result<()> {
+pub async fn start_server(bind: String, port: u16, secrets_path: String) -> std::io::Result<()> {
     println!("Starting server at http://{}:{}", bind, port);
 
     println!("Secrets will be read from {}", secrets_path);
@@ -54,5 +54,6 @@ pub async fn start_server(bind: &str, port: u16, secrets_path: String) -> std::i
     })
     .bind((bind, port))?
     .run()
-    .await
+    .await;
+    Ok(())
 }
