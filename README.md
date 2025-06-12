@@ -14,7 +14,7 @@ Other features include:
 
 * lock interface with/out password
 * auto-lock after *n* seconds (configurable, can be disabled) or manual lock (Press `l`)
-* copy to clipboard (devices that support this can be checked at [copypasta](https://github.com/alacritty/copypasta), the library used for this feature)
+* copy to clipboard (for supported devices: [copypasta](https://github.com/alacritty/copypasta), the library used for this feature)
 * 4 "fonts"
 * display how many seconds until each token expires
 
@@ -96,6 +96,7 @@ The UI supports auto-locking and manual locking, with indicators and password un
 * `0`..`9`, `a`..`j`: Copy corresponding TOTP to clipboard
 * `q`: Quit the application
 * `l`: Lock the interface manually
+* `r`: Reload secrets file
 
 ###
 
@@ -194,8 +195,8 @@ totp-generator --secrets ./secrets.toml --number-style pipe
 ## 🛠 Building from Source
 
 ```sh
-git clone https://github.com/your/repo.git
-cd your-repo
+git clone https://github.com/matiboy/totp-generator.git
+cd totp-generator
 cargo build --release
 ```
 
@@ -203,13 +204,18 @@ cargo build --release
 
 ## TODO
 
-- [ ] Allow the number of digits (for the TOTP) to be optionally set on secrets in the `TOML` file
-- [ ] Concurrent CUI and HTTP API
+- [ ] Multiple pages when more than 20 items
+- [ ] Vertical layout
+- [ ] Reload configuration feature
+  - [ ] Set configuration path from the interface?
+- [X] Allow the number of digits (for the TOTP) to be optionally set on secrets in the `TOML` file
+- [X] Concurrent CUI and HTTP API
 - [ ] Better Messaging with:
   - [ ] different color for error
   - [ ] disappearing messages
   - [ ] tab or floating view to see all messages 
 - [X] Tracing
+  - [ ] Tracing to not interfere with TUI
 
 ## 📃 License
 
