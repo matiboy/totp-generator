@@ -31,10 +31,11 @@ async fn main() -> anyhow::Result<()> {
     // Need to keep reference to _log otherwise lose the log file
     let _log = logging::setup_tracing(&args.log_file, args.std_err.unwrap());
     tracing::info!("Starting app...");
+    let mut secrets_cf = ConfigFile::new(args.secrets.clone());
     if let Some(arg) = &args.one_time {
         #[cfg(feature = "onetime")]
         {
-            let o = one_time_mode(&args.secrets, arg).await?;
+            let o = one_time_mode(&mut secrets_cf, arg).await?;
             tracing::info!("One time mode outcome: {o}");
             println!("{o}");
         }
@@ -46,7 +47,6 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let secrets: Arc<Mutex<String>> = Arc::new(Mutex::new(args.secrets));
     let mut set: JoinSet<()> = JoinSet::new();
     let (http_shutdown_tx, http_shutdown_rx) = oneshot::channel::<()>();
     let (ui_shutdown_tx, ui_shutdown_rx) = oneshot::channel::<()>();
