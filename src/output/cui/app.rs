@@ -12,9 +12,7 @@ use tokio::time::{self, Duration};
 use tokio_stream::StreamExt;
 
 use crate::{
-    config::secrets::{load_secrets, ConfigEntry},
-    output::cui::input::keyboard::KeyboardAction,
-    state::State,
+    config::secrets::ConfigEntry, output::cui::input::keyboard::KeyboardAction, state::State,
 };
 
 use super::components::{messages::Messages, totp_box::TotpBox};
@@ -46,7 +44,7 @@ impl App {
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
         loop {
             interval.tick().await;
-            if self.update_totps() {
+            if self.update_totps().await {
                 break;
             }
         }
@@ -110,7 +108,8 @@ impl App {
         (r, c)
     }
     fn render_normal_screen(&mut self, frame: &mut Frame) {
-        let [messages_row, totps_row]: [Rect; 2] = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(frame.area());
+        let [messages_row, totps_row]: [Rect; 2] =
+            Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(frame.area());
         self.render_totps(totps_row, frame);
         frame.render_widget(Paragraph::new(self.messages.last()), messages_row);
     }
@@ -152,19 +151,6 @@ impl App {
         self.state.unlocked_since = None;
     }
 
-    pub async fn update_secrets_list(&mut self) {
-        let secrets = self.state.secrets_path.lock().await;
-        match load_secrets(secrets.as_str()) {
-            Ok(secrets) => {
-                tracing::debug!("Loaded {} entries from secrets", secrets.entries.len());
-                self.secrets = secrets.entries
-            }
-            Err(err) => {
-                tracing::error!("Failed to load secrets: {}", err);
-            }
-        };
-    }
-
     fn get_rows_and_columns(&self) -> (u8, u8) {
         match self.secrets.len() {
             n if n <= 4 => (2, 2),
@@ -177,10 +163,21 @@ impl App {
         }
     }
 
-    fn update_totps(&mut self) -> bool {
-        // Check whether we are locked in the first place
-        let secrets = &self.secrets;
+    async fn update_totps(&mut self) -> bool {
         let mut has_changed = false;
+        match self.state.secrets_cf.load().await {
+            Err(err) => {
+                tracing::error!("Error loading secrets file {err}");
+                self.secrets = vec![];
+            }
+            Ok((changed, entries)) => {
+                has_changed = changed;
+                if changed {
+                    self.secrets = entries;
+                }
+            }
+        };
+        let secrets = &self.secrets;
         if secrets.len() != self.totps.len() {
             self.totps.truncate(secrets.len());
             has_changed = true;
@@ -206,7 +203,6 @@ impl App {
         has_changed
     }
 }
-
 
 #[cfg(feature = "cli")]
 pub async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<()> {
