@@ -22,7 +22,6 @@ use output::cui::console::start_console_ui;
 
 use state::State;
 use tokio::sync::oneshot;
-use tokio::sync::Mutex;
 use tokio::{signal, task::JoinSet};
 
 #[actix_web::main]
@@ -38,6 +37,7 @@ async fn main() -> anyhow::Result<()> {
             let o = one_time_mode(&mut secrets_cf, arg).await?;
             tracing::info!("One time mode outcome: {o}");
             println!("{o}");
+            return Ok(());
         }
         #[cfg(not(feature = "onetime"))]
         {
@@ -48,22 +48,31 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let mut set: JoinSet<()> = JoinSet::new();
+    let secrets_cf = Arc::new(secrets_cf);
     let (http_shutdown_tx, http_shutdown_rx) = oneshot::channel::<()>();
     let (ui_shutdown_tx, ui_shutdown_rx) = oneshot::channel::<()>();
     if let Some(bind) = args.bind {
         // If --bind is provided, launch the server
         #[cfg(feature = "http")]
         {
+            let web_secrets_cf = Arc::clone(&secrets_cf);
             tracing::info!("Launching HTTP server at {}:{}", bind, args.port);
             let bind = bind.clone();
             let port = args.port;
             // Due to actix_web not being Send, we have to run this in a separate thread
-            let secrets = Arc::clone(&secrets);
             thread::spawn(move || {
                 actix_web::rt::System::new().block_on(async move {
                     tokio::select! {
-                        _ = start_server(bind, port, secrets) => {
-                            tracing::info!("HTTP server started");
+                        i = start_server(bind, port, web_secrets_cf) => {
+                            match i {
+                                Err(err) => {
+                                    tracing::error!("HTTP server error'd: {err}")
+                                }
+                                Ok(i) => {
+
+                            tracing::info!("HTTP server ended {:?}", i);
+                                }
+                            }
                         }
                         _ = ui_shutdown_rx => {
                             tracing::info!("HTTP server shutdown requested");
@@ -74,6 +83,7 @@ async fn main() -> anyhow::Result<()> {
             });
             set.spawn(async move {
                 http_shutdown_rx.await;
+                println!("Received request to shutdown HTTP server via oneshot channel")
             });
         }
         #[cfg(not(feature = "http"))]
@@ -84,12 +94,12 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     if let Some(false) = args.no_console {
-        #[cfg(feature="cli")]
+        #[cfg(feature = "cli")]
         {
             let unlock_password = env::var("UNLOCK_PASSWORD").ok();
             // Default to console UI
             let state = State::default(
-                Arc::clone(&secrets),
+                Arc::clone(&secrets_cf),
                 unlock_password,
                 args.lock_after,
                 args.number_style,

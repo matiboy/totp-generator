@@ -1,5 +1,6 @@
-use std::{sync::Arc, time::SystemTime};
+use std::{ops::Deref, sync::Arc, time::SystemTime};
 
+use actix_web::http::header::LAST_MODIFIED;
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
@@ -30,18 +31,27 @@ fn default_step() -> u16 {
 }
 
 #[derive(Debug)]
+pub struct ConfigData {
+    pub entries: Vec<ConfigEntry>,
+    last_modified: SystemTime,
+}
+
+#[derive(Debug)]
 pub struct ConfigFile {
-    last_updated: SystemTime,
     pub secrets_path: String,
-    entries: Arc<RwLock<Vec<ConfigEntry>>>,
+    data: Arc<RwLock<ConfigData>>,
 }
 
 impl ConfigFile {
     pub fn new(secrets_path: String) -> Self {
         ConfigFile {
             secrets_path,
-            last_updated: SystemTime::UNIX_EPOCH,
-            entries: Arc::new(RwLock::new(vec![])),
+            data: Arc::new(RwLock::new(
+                ConfigData {
+                    entries: Vec::new(),
+                    last_modified: SystemTime::UNIX_EPOCH,
+                },
+            )),
         }
     }
 
@@ -56,27 +66,44 @@ impl ConfigFile {
         Ok(parsed)
     }
 
-    pub async fn load(&mut self) -> Result<(bool, Vec<ConfigEntry>)> {
-        let last_updated = self.last_updated;
-        let mut modified = false;
-        let metadata = std::fs::metadata(&self.secrets_path)
-            .with_context(|| format!("Failed to read metadata for {}", self.secrets_path))?;
-        if metadata.modified().is_err() || metadata.modified()? <= last_updated {
+    async fn has_been_modified<T: Deref<Target = ConfigData>>(&self, guard: &T, ) -> Result<bool> {
+            let metadata = fs::metadata(&self.secrets_path).await
+                .with_context(|| format!("Failed to read metadata for {}", self.secrets_path))?;
+        tracing::debug!("Meta data for file {metadata:?}");
+            let metadata_modified = metadata.modified()?;
+        Ok(guard.last_modified < metadata_modified)
+    }
+
+    pub async fn load(&self) -> Result<(bool, Vec<ConfigEntry>)> {
+        // First check that we believe the file has been modified (relies on metadata)
+        let mut has_been_modified = {
+            let data = self.data.read().await;
+            self.has_been_modified(&data).await
+        }?;
+        if !has_been_modified {
             tracing::debug!(
                 "Config file {} has not been modified since last load",
                 self.secrets_path
             );
         } else {
-            modified = true;
             tracing::info!(
                 "Config file {} has been modified, reloading",
                 self.secrets_path
             );
-            self.last_updated = metadata.modified()?;
-            let mut entries = self.entries.write().await;
-            *entries = Self::load_secrets(&self.secrets_path).await?;
-        }
-        Ok((modified, self.entries.read().await.clone()))
+            let entries = Self::load_secrets(&self.secrets_path).await?;
+            let mut data = self.data.write().await;
+            // Since we conducted some reading file/parsing, there is a small chance of race
+            // condition where there was a more recent update, so we check once more with a Write
+            // lock this time
+            if self.has_been_modified(&data).await? {
+                data.last_modified = SystemTime::now();
+            data.entries = entries;
+                has_been_modified = true;
+            } else {
+                has_been_modified = false;
+            }
+        };
+        Ok((has_been_modified, self.data.read().await.entries.clone()))
     }
 
     pub fn get_secret(secrets: &Vec<ConfigEntry>, arg: &str) -> Result<ConfigEntry> {

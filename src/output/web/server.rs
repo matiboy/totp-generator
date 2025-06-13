@@ -1,22 +1,26 @@
-use crate::{config::secrets::get_secret, load_secrets, totp::Totp};
+use crate::{config::secrets::ConfigFile, totp::Totp};
 use actix_web::{
     get,
     http::header::{self, Accept},
     mime, web, App, HttpResponse, HttpResponseBuilder, HttpServer, Responder,
 };
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[cfg(feature = "http")]
 #[get("/list")]
-async fn list_entries(secrets_path: web::Data<Arc<Mutex<String>>>) -> impl Responder {
-    let secrets_path = secrets_path.lock().await;
-    tracing::debug!("Listing entries from secrets at: {}", secrets_path);
-    let secrets_path = secrets_path.as_str();
-    match load_secrets(secrets_path) {
+async fn list_entries(secrets_cf: web::Data<Arc<ConfigFile>>) -> impl Responder {
+    use actix_web::http::header::ContentType;
+
+    let result : anyhow::Result<String> = async {
+        let (_, secrets) = secrets_cf.load().await?;
+        let as_string = serde_json::to_string(&secrets)?;
+        Ok(as_string)
+    }.await;
+    match result {
         Ok(secrets) => {
-            tracing::debug!("Loaded {} entries from secrets", secrets.entries.len());
-            HttpResponse::Ok().json(secrets.entries)
+            HttpResponse::Ok()
+                .content_type(ContentType::json())
+                .body(secrets)
         }
         Err(err) => {
             tracing::error!("Failed to load secrets: {}", err);
@@ -40,16 +44,21 @@ fn accept_contains_json(accept: &Accept) -> bool {
 #[cfg(feature = "http")]
 #[get("/code/{code}")]
 async fn get_code(
-    secrets_path: web::Data<Arc<Mutex<String>>>,
+    secrets_cf: web::Data<Arc<ConfigFile>>,
     path: web::Path<String>,
     accept: Option<web::Header<header::Accept>>,
 ) -> impl Responder {
     let code = path.into_inner();
 
-    let secrets_path = secrets_path.lock().await;
-    match get_secret(secrets_path.as_str(), code.as_str()) {
-        Ok(entry) => {
+    let result: anyhow::Result<Totp> = async {
+        let (_, secrets) = secrets_cf.load().await?;
+        let entry = ConfigFile::get_secret(&secrets, code.as_str())?;
             let totp = Totp::new(entry.secret.as_str(), entry.timestep, entry.digits);
+            Ok(totp)
+    }.await;
+
+    match result {
+        Ok(totp) => {
             let mut builder = HttpResponse::Ok();
             match accept {
                 Some(header) => {
@@ -72,17 +81,17 @@ async fn get_code(
 pub async fn start_server(
     bind: String,
     port: u16,
-    secrets_path: Arc<Mutex<String>>,
-) -> std::io::Result<()> {
-    tracing::debug!("Secrets will be read from {secrets_path}");
+    secrets_cf: Arc<ConfigFile>,
+) -> anyhow::Result<()> {
+    tracing::debug!("Secrets will be read from {}", secrets_cf.secrets_path);
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(secrets_path.clone()))
+            .app_data(web::Data::new(Arc::clone(&secrets_cf)))
             .service(list_entries)
             .service(get_code)
     })
     .bind((bind, port))?
     .run()
-    .await;
+    .await?;
     Ok(())
 }
