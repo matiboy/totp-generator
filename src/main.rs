@@ -5,6 +5,7 @@ mod totp;
 mod logging;
 
 use std::env;
+use std::sync::Arc;
 use std::thread;
 
 use clap::Parser;
@@ -17,6 +18,7 @@ use output::web::server::start_server;
 use output::cui::console::start_console_ui;
 use state::State;
 use tokio::sync::oneshot;
+use tokio::sync::Mutex;
 use tokio::{signal, task::JoinSet};
 
 #[actix_web::main]
@@ -40,6 +42,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    let secrets: Arc<Mutex<String>> = Arc::new(Mutex::new(args.secrets));
     let mut set = JoinSet::new();
     let (http_shutdown_tx, http_shutdown_rx) = oneshot::channel::<()>();
     let (ui_shutdown_tx, ui_shutdown_rx) = oneshot::channel::<()>();
@@ -50,8 +53,8 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("Launching HTTP server at {}:{}", bind, args.port);
             let bind = bind.clone();
             let port = args.port;
-            let secrets = args.secrets.clone();
             // Due to actix_web not being Send, we have to run this in a separate thread
+            let secrets = Arc::clone(&secrets);
             thread::spawn(move || {
                 actix_web::rt::System::new().block_on(async move {
                     tokio::select! {
@@ -80,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
         let unlock_password = env::var("UNLOCK_PASSWORD").ok();
         // Default to console UI
         let state = State::default(
-            args.secrets.clone(),
+            Arc::clone(&secrets),
             unlock_password,
             args.lock_after,
             args.number_style,

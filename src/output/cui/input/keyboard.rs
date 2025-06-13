@@ -3,6 +3,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::output::cui::app::App;
 
+#[cfg(feature = "cli")]
 impl App {
     pub fn handle_key(&mut self, key: KeyEvent) -> KeyboardAction {
         let (code, modifiers) = (key.code, key.modifiers);

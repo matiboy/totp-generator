@@ -204,6 +204,7 @@ cargo build --release
 
 ## TODO
 
+- [ ] Change config according to features
 - [ ] Multiple pages when more than 20 items
 - [ ] Vertical layout
 - [ ] Reload configuration feature

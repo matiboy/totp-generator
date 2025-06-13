@@ -22,14 +22,17 @@ use super::components::{messages::Messages, totp_box::TotpBox};
 pub struct App {
     pub totps: Vec<TotpBox>,
     pub state: State,
+    secrets: Vec<ConfigEntry>,
     messages: Messages,
 }
 
+#[cfg(feature = "cli")]
 impl App {
     pub fn new(state: State) -> App {
         App {
             totps: vec![],
             state,
+            secrets: vec![],
             messages: Messages::new(),
         }
     }
@@ -111,6 +114,7 @@ impl App {
         self.render_totps(totps_row, frame);
         frame.render_widget(Paragraph::new(self.messages.last()), messages_row);
     }
+
     fn render_totps(&mut self, rect: Rect, frame: &mut Frame) {
         let (row_constraint, col_constraint) = self.get_row_and_column_constraints();
         let rows = Layout::vertical(&row_constraint).split(rect);
@@ -148,12 +152,21 @@ impl App {
         self.state.unlocked_since = None;
     }
 
-    fn get_secrets_list(&self) -> Vec<ConfigEntry> {
-        load_secrets(self.state.secrets_path.as_str()).entries
+    pub async fn update_secrets_list(&mut self) {
+        let secrets = self.state.secrets_path.lock().await;
+        match load_secrets(secrets.as_str()) {
+            Ok(secrets) => {
+                tracing::debug!("Loaded {} entries from secrets", secrets.entries.len());
+                self.secrets = secrets.entries
+            }
+            Err(err) => {
+                tracing::error!("Failed to load secrets: {}", err);
+            }
+        };
     }
 
     fn get_rows_and_columns(&self) -> (u8, u8) {
-        match self.get_secrets_list().len() {
+        match self.secrets.len() {
             n if n <= 4 => (2, 2),
             n if n <= 6 => (2, 3),
             n if n <= 9 => (3, 3),
@@ -166,7 +179,7 @@ impl App {
 
     fn update_totps(&mut self) -> bool {
         // Check whether we are locked in the first place
-        let secrets = self.get_secrets_list();
+        let secrets = &self.secrets;
         let mut has_changed = false;
         if secrets.len() != self.totps.len() {
             self.totps.truncate(secrets.len());
@@ -194,6 +207,8 @@ impl App {
     }
 }
 
+
+#[cfg(feature = "cli")]
 pub async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<()> {
     let mut reader = EventStream::new();
     loop {
