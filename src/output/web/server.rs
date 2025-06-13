@@ -1,30 +1,12 @@
 use crate::{config::secrets::get_secret, load_secrets, totp::Totp};
 use actix_web::{
-    get,post,
+    get,
     http::header::{self, Accept},
     mime, web, App, HttpResponse, HttpResponseBuilder, HttpServer, Responder,
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[cfg(feature = "http")]
-#[post("/secrets/refresh")]
-async fn refresh_secrets(secrets_path: web::Data<Arc<Mutex<String>>>) -> impl Responder {
-
-    let secrets_path = secrets_path.lock().await;
-    tracing::debug!("Listing entries from secrets at: {}", secrets_path);
-    let secrets_path = secrets_path.as_str();
-    match load_secrets(secrets_path) {
-        Ok(secrets) => {
-            tracing::debug!("Loaded {} entries from secrets", secrets.entries.len());
-            HttpResponse::Ok().json(secrets.entries)
-        }
-        Err(err) => {
-            tracing::error!("Failed to load secrets: {}", err);
-            HttpResponse::BadRequest().body("Failed to load secrets")
-        }
-    }
-}
 #[cfg(feature = "http")]
 #[get("/list")]
 async fn list_entries(secrets_path: web::Data<Arc<Mutex<String>>>) -> impl Responder {

@@ -1,21 +1,25 @@
 mod config;
+mod logging;
 mod output;
 mod state;
 mod totp;
-mod logging;
 
 use std::env;
 use std::sync::Arc;
 use std::thread;
 
 use clap::Parser;
-use config::{configuration::Args, secrets::load_secrets};
+use config::{configuration::Args, secrets::ConfigFile};
+
 #[cfg(feature = "onetime")]
 use output::onetime::one_time_mode;
+
 #[cfg(feature = "http")]
 use output::web::server::start_server;
+
 #[cfg(feature = "cli")]
 use output::cui::console::start_console_ui;
+
 use state::State;
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
@@ -28,22 +32,22 @@ async fn main() -> anyhow::Result<()> {
     let _log = logging::setup_tracing(&args.log_file, args.std_err.unwrap());
     tracing::info!("Starting app...");
     if let Some(arg) = &args.one_time {
-        #[cfg(feature = "cli")]
+        #[cfg(feature = "onetime")]
         {
-            let o = one_time_mode(&args.secrets, arg)?;
+            let o = one_time_mode(&args.secrets, arg).await?;
             tracing::info!("One time mode outcome: {o}");
             println!("{o}");
         }
-        #[cfg(not(feature = "cli"))]
+        #[cfg(not(feature = "onetime"))]
         {
-            tracing::warn!("One-time mode is not enabled in this build. Please enable the 'cli' feature to use it.");
-            eprintln!("One-time mode is not enabled in this build. Please enable the 'cli' feature to use it.");
-            return anyhow!("One-time mode is not enabled in this build. Please enable the 'cli' feature to use it.");
+            tracing::warn!("One-time mode is not enabled in this build. Please enable the 'onetime' feature to use it.");
+            eprintln!("One-time mode is not enabled in this build. Please enable the 'oneime' feature to use it.");
+            return Err(anyhow::anyhow!("One-time mode is not enabled in this build. Please enable the 'onetime' feature to use it."));
         }
     }
 
     let secrets: Arc<Mutex<String>> = Arc::new(Mutex::new(args.secrets));
-    let mut set = JoinSet::new();
+    let mut set: JoinSet<()> = JoinSet::new();
     let (http_shutdown_tx, http_shutdown_rx) = oneshot::channel::<()>();
     let (ui_shutdown_tx, ui_shutdown_rx) = oneshot::channel::<()>();
     if let Some(bind) = args.bind {
@@ -76,21 +80,24 @@ async fn main() -> anyhow::Result<()> {
         {
             tracing::warn!("HTTP server is not enabled in this build. Please enable the 'http' feature to use it.");
             eprintln!("HTTP server is not enabled in this build. Please enable the 'http' feature to use it.");
-            return Err(anyhow!("HTTP server is not enabled in this build. Please enable the 'http' feature to use it."));
+            return Err(anyhow::anyhow!("HTTP server is not enabled in this build. Please enable the 'http' feature to use it."));
         }
     }
     if let Some(false) = args.no_console {
-        let unlock_password = env::var("UNLOCK_PASSWORD").ok();
-        // Default to console UI
-        let state = State::default(
-            Arc::clone(&secrets),
-            unlock_password,
-            args.lock_after,
-            args.number_style,
-        );
-        set.spawn(async move {
-            start_console_ui(state).await;
-        });
+        #[cfg(feature="cli")]
+        {
+            let unlock_password = env::var("UNLOCK_PASSWORD").ok();
+            // Default to console UI
+            let state = State::default(
+                Arc::clone(&secrets),
+                unlock_password,
+                args.lock_after,
+                args.number_style,
+            );
+            set.spawn(async move {
+                start_console_ui(state).await;
+            });
+        }
     }
     if set.is_empty() {
         println!("Please select at least one of the modes: console/http or one-time");
