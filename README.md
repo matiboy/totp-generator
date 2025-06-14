@@ -4,25 +4,37 @@
 
 Built in Rust, it's designed to run **offline**, securely, and efficiently even on low-powered devices like a **Raspberry Pi**.
 
-You can output TOTP codes in one of three ways:
+![Console UI Overview](assets/console-ui.png)
 
-* **Console UI** (default): a fullscreen terminal interface with live-updating tokens.
+You can output TOTP codes in one or more ways:
+
+* **Console UI**: a fullscreen terminal interface with live-updating tokens.
 * **HTTP API**: exposes endpoints like `GET /list` and `GET /code/<name>`.
-* **One-time mode**: print a token directly via CLI with `--one-time`.. Basically Google Authenticator in your terminal.
+* **One-time mode**: print a token directly via CLI with `--one-time`.
 
 Other features include:
 
 * lock interface with/out password
+
 * auto-lock after *n* seconds (configurable, can be disabled) or manual lock (Press `l`)
-* copy to clipboard (for supported devices: [copypasta](https://github.com/alacritty/copypasta), the library used for this feature)
-* 4 "fonts"
+
+* copy to clipboard (for supported devices: [copypasta](https://github.com/alacritty/copypasta))
+
+* 3 "fonts"
+
+  * ![Pipe Font Style](assets/font-pipe.png)
+
+  * ![Lite Font Style](assets/font-lite.png)
+
 * display how many seconds until each token expires
+
+* concurrent Console UI and HTTP server support
 
 ---
 
 ## 📦 Requirements
 
-* A TOML-formatted secrets file (see [Secrets Format](#secrets-format))
+* A JSON-formatted secrets file (see [Secrets Format](#secrets-format)). A sample secrets config can be found under `examples/config.json`
 * Rust (to build from source) - pre-compiled binaries coming soon
 
 ---
@@ -33,82 +45,99 @@ Other features include:
 totp-generator [OPTIONS] --secrets <SECRETS>
 ```
 
-### 🧭 Modes of Operation
+### 🧽 Modes of Operation
 
-This tool operates in one of the following modes:
+This tool supports running in multiple modes simultaneously:
 
 * **Console UI** *(default)*: Interactive TOTP code viewer with optional lockout.
-* **One-time Mode** (`--one-time <YOUR SECRET'S NAME>`): Generates a TOTP for the secret with code \<YOUR SECRET'S NAME> (see TOML file format).
+* **One-time Mode** (`--one-time <YOUR SECRET'S NAME>`): Generates a TOTP for the secret with code or index `<YOUR SECRET'S NAME>`.
 * **HTTP API Mode** (`--bind <ADDR>`): Runs a web service for serving generated codes via HTTP.
 
-If both `--one-time` and `--bind` are omitted, the application defaults to interactive console UI.
+HTTP mode can run in the background of the console UI, or specify --no-console to run the HTTP API only.
 
 ### 🔧 Options
 
-| Flag                 | Env Var                 | Description                                                                                      |
-| -------------------- | ----------------------- | ------------------------------------------------------------------------------------------------ |
-| `-s`, `--secrets`    | `AUTHENTICATOR_SECRETS` | **Required.** Path to the [secrets TOML file](#secrets-format).                                  |
-| `-o`, `--one-time`   |                         | Generate a single TOTP code.                                                                     |
-| `-b`, `--bind`       |                         | Launches the server in HTTP mode at the specified address.                                       |
-| `-p`, `--port`       |                         | Port to listen on. Default: `3000`.                                                              |
-| `-l`, `--lock-after` |                         | Inactivity timeout in seconds before locking UI. Use `0` to disable. Default: `300` (5 minutes). |
-| `--number-style`     |                         | Display style for numbers. One of: `standard`, `pipe`, `lite`. Default: `standard`.              |
+| Flag                 | Env Var         | Description                                                                        |
+| -------------------- | --------------- | ---------------------------------------------------------------------------------- |
+| `-s`, `--secrets`    | `TOTP_SECRETS`  | **Required.** Path to the [secrets JSON file](#secrets-format).                    |
+| `-o`, `--one-time`   |                 | Generate a single TOTP code for a given code or index.                             |
+| `-b`, `--bind`       |                 | Launch the HTTP server at the specified address. (required if --no-console is set) |
+| `-p`, `--port`       |                 | Port to listen on. Default: `3000`.                                                |
+| `-l`, `--lock-after` |                 | Timeout in seconds before UI auto-locks. `0` disables. Default: `300`.             |
+| `--number-style`     |                 | Number display style: `standard`, `pipe`, `lite`. Default: `standard`.             |
+| `--no-console`       |                 | Run without starting the Console UI.                                               |
+| `--log-file`         | `TOTP_LOG_FILE` | Optional path to log file.                                                         |
+| `--std-err`          |                 | Output logs to stderr. Usually conflicts with Console UI.                          |
 
 ---
 
 ## 📁 Secrets Format
 
-The secrets file must be a valid [TOML](https://toml.io/en/) document. Each entry represents a TOTP configuration.
+The secrets file must be a valid [JSON](https://www.json.org/) document. Each entry represents a TOTP configuration.
 
-### 📝 Example [`secrets.toml`](#secrets-format)
+### 📝 Example `secrets.json`
 
-```toml
-[[entry]]
-name = "My GitHub"
-secret = "JBSWY3DPEHPK3PXP"
-timestep = 30
-
-[[entry]]
-name = "Work Email"
-# "code" is the short way to address which secret to use in --one-time and HTTP modes
-code = "gmail"
-secret = "ABCD1234EFGH5678"
+```json
+[
+  {
+    "name": "My GitHub",
+    "secret": "JBSWY3DPEHPK3PXP"
+  },
+  {
+    "name": "Work Email",
+    "code": "gmail",
+    "secret": "ABCD1234EFGH5678",
+    "digits": 8,
+    "timestep": 60
+  }
+]
 ```
+
+* `code` is the short identifier used in `--one-time` or HTTP modes.
+* `digits` (optional): number of digits in the TOTP token. Default: `6`
+* `timestep` (optional): time interval for TOTP refresh. Default: `30`
+
+A sample secrets config can be found under `examples/config.json`
 
 ---
 
 ## 🖥 Console UI
 
-In the default mode, the application launches a fullscreen console UI that shows a box for each TOTP entry from your secrets file. Each token automatically refreshes when it expires.
+![Console UI Overview](assets/console-ui.png)
+
+In default mode, the application launches a fullscreen terminal UI displaying a box for each TOTP entry. Each token auto-refreshes as it expires.
 
 ### 🔲 Box Layout (per entry):
 
-* **Top Left**: An identifier (`0..9`, `a..j`) — press this key to copy the token to clipboard.
-* **Top Right**: The `code` associated with the entry.
+* **Top Left**: Identifier (`0..9`, `a..j`) for  clipboard copy.
+* **Top Right**: `code` of the entry.
 * **Center**: The `name` field.
-* **Below Center**: The current TOTP token.
-* **Bottom Right**: How many seconds remain until the token expires.
+* **Main area**: The current TOTP token.
+* **Bottom**: Seconds remaining before expiration.
 
-The UI supports auto-locking and manual locking, with indicators and password unlock if configured.
+UI supports auto-lock and manual locking with password unlock if configured.
 
 ### ⌨️ Key Bindings
 
-* `0`..`9`, `a`..`j`: Copy corresponding TOTP to clipboard
-* `q`: Quit the application
-* `l`: Lock the interface manually
-* `r`: Reload secrets file
+* `0`..`9`, `a`..`j`: Copy token to clipboard
+* `q`: Quit
+* `l`: Lock manually
 
-###
+### 📋 Other Considerations
+
+* The layout will adapt to the number of secrets, up to 20 entries.
+
+* Secrets file will be automatically reloaded if modified.
 
 ---
 
 ## 🌐 HTTP API
 
-When run with the `--bind` option, the program exposes a minimal HTTP API for reading available entries and generating tokens.
+When run with the `--bind` option, the program exposes a minimal HTTP API.
 
 ### `GET /list`
 
-Returns a list of available TOTP entries based on your secrets file (excluding the `secret` field).
+Returns the list of configured TOTP entries (without secrets).
 
 #### ✅ Response (application/json)
 
@@ -116,24 +145,23 @@ Returns a list of available TOTP entries based on your secrets file (excluding t
 [
   {
     "name": "My GitHub",
-    "code": "",
     "timestep": 30
   },
   {
     "name": "Work Email",
     "code": "gmail",
-    "timestep": 30
+    "timestep": 60
   }
 ]
 ```
 
-### `GET /code/<YOUR SECRET'S 'CODE'>`
+### `GET /code/<YOUR SECRET'S CODE>`
 
-Returns the current TOTP token for the matching entry. `YOUR SECRET'S CODE` corresponds to the `code` field in the TOML entry.
+Returns current TOTP token for the given code.
 
-The response format depends on the `Accept` header:
+The response depends on the `Accept` header:
 
-* If `Accept: application/json` is sent, the response is structured:
+* `application/json`:
 
 ```json
 {
@@ -143,7 +171,7 @@ The response format depends on the `Accept` header:
 }
 ```
 
-* Otherwise, the plain token is returned:
+* Otherwise (text/plain):
 
 ```
 415314
@@ -159,36 +187,40 @@ curl http://localhost:3000/code/gmail
 
 ## 📌 Examples
 
-Start the interactive console UI:
+Start UI + API on default port (3000):
 
 ```sh
-totp-generator --secrets ./secrets.toml
+totp-generator --secrets ./secrets.json --bind 127.0.0.1
 ```
 
-Use a custom port with no auto-lock:
+Run HTTP only (no UI):
 
 ```sh
-totp-generator --secrets ./secrets.toml --port 8080 --lock-after 0
+totp-generator --secrets ./secrets.json --bind 127.0.0.1 --no-console
 ```
 
-Generate a one-time code (using "gmail" as the secret name, referring to the `code` field of the entry in the [`TOML`](#secrets-format)[ file](#secrets-format)):
+One-time code using code "gmail":
 
 ```sh
-export AUTHENTICATOR_SECRETS=$HOME/.google_authenticator.toml
+export TOTP_SECRETS=$HOME/.google_authenticator.json
 totp-generator --one-time gmail
 ```
 
-Run as HTTP server:
+Disable UI lock:
 
 ```sh
-totp-generator --secrets ./secrets.toml --bind 127.0.0.1
+totp-generator --secrets ./secrets.json --lock-after 0
 ```
 
-Display codes in pipe style (Console UI only):
+Use pipe style font:
+
+![Pipe Font Style](assets/font-pipe.png)
 
 ```sh
-totp-generator --secrets ./secrets.toml --number-style pipe
+totp-generator --secrets ./secrets.json --number-style pipe
 ```
+
+A sample secrets config can be found under `examples/config.json`
 
 ---
 
@@ -199,8 +231,6 @@ git clone https://github.com/matiboy/totp-generator.git
 cd totp-generator
 cargo build --release
 ```
-
----
 
 ## TODO
 
@@ -221,4 +251,5 @@ cargo build --release
 ## 📃 License
 
 MIT or Apache-2.0
+
 

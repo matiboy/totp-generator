@@ -1,3 +1,4 @@
+use ::time::{format_description, OffsetDateTime};
 use crossterm::event::{Event, EventStream};
 use ratatui::{
     backend::Backend,
@@ -36,7 +37,10 @@ impl App {
     }
 
     pub fn add_message(&mut self, message: String) {
-        self.messages.push(message);
+        let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+        let fmt = format_description::parse("[hour]:[minute]:[second]").unwrap();
+        let out = now.format(&fmt).unwrap();
+        self.messages.push(format!("[{}] {message}", out));
     }
 
     pub async fn totp_changed(&mut self) {
@@ -169,11 +173,13 @@ impl App {
             Err(err) => {
                 tracing::error!("Error loading secrets file {err}");
                 self.secrets = vec![];
+                self.add_message(format!("Error loading secrets file {err}"));
             }
             Ok((changed, entries)) => {
                 has_changed = changed;
                 if changed {
                     self.secrets = entries;
+                    self.add_message("Secrets file has changed, reloading".to_owned());
                 }
             }
         };
