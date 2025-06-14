@@ -34,7 +34,7 @@ Other features include:
 
 ## 📦 Requirements
 
-* A JSON-formatted secrets file (see [Secrets Format](#secrets-format)). A sample secrets config can be found under `examples/config.json`
+* A JSON-formatted secrets file (see [Secrets Format](#secrets-format)). A sample secrets config can be found under [`examples/config.json`](./examples/config.json)
 * Rust (to build from source) - pre-compiled binaries coming soon
 
 ---
@@ -45,29 +45,41 @@ Other features include:
 totp-generator [OPTIONS] --secrets <SECRETS>
 ```
 
+OR
+
+```sh
+export TOTP_SECRETS=.mysecrets.json
+totp-generator [OPTIONS]
+```
+
 ### 🧽 Modes of Operation
 
-This tool supports running in multiple modes simultaneously:
+This tool supports running in two primary ways: **one-time** or **live**.
 
-* **Console UI** *(default)*: Interactive TOTP code viewer with optional lockout.
-* **One-time Mode** (`--one-time <YOUR SECRET'S NAME>`): Generates a TOTP for the secret with code or index `<YOUR SECRET'S NAME>`.
-* **HTTP API Mode** (`--bind <ADDR>`): Runs a web service for serving generated codes via HTTP.
+* In **one-time** mode (`--one-time <NAME>`), the tool simply prints a token for the selected secret and exits.
+* In **live** mode, you may run:
+
+  * the **Console UI** (default interactive interface),
+  * the **HTTP API**, or
+  * **both simultaneously**.
 
 HTTP mode can run in the background of the console UI, or specify --no-console to run the HTTP API only.
 
 ### 🔧 Options
 
-| Flag                 | Env Var         | Description                                                                        |
-| -------------------- | --------------- | ---------------------------------------------------------------------------------- |
-| `-s`, `--secrets`    | `TOTP_SECRETS`  | **Required.** Path to the [secrets JSON file](#secrets-format).                    |
-| `-o`, `--one-time`   |                 | Generate a single TOTP code for a given code or index.                             |
-| `-b`, `--bind`       |                 | Launch the HTTP server at the specified address. (required if --no-console is set) |
-| `-p`, `--port`       |                 | Port to listen on. Default: `3000`.                                                |
-| `-l`, `--lock-after` |                 | Timeout in seconds before UI auto-locks. `0` disables. Default: `300`.             |
-| `--number-style`     |                 | Number display style: `standard`, `pipe`, `lite`. Default: `standard`.             |
-| `--no-console`       |                 | Run without starting the Console UI.                                               |
-| `--log-file`         | `TOTP_LOG_FILE` | Optional path to log file.                                                         |
-| `--std-err`          |                 | Output logs to stderr. Usually conflicts with Console UI.                          |
+| Flag                 | Env Var           | Description                                                                        |
+| -------------------- | ----------------- | ---------------------------------------------------------------------------------- |
+| `-s`, `--secrets`    | `TOTP_SECRETS`    | **Required.** Path to the [secrets JSON file](#secrets-format).                    |
+| `-o`, `--one-time`   |                   | Generate a single TOTP code for a given code or index.                             |
+| `-b`, `--bind`       |                   | Launch the HTTP server at the specified address. (required if --no-console is set) |
+| `-p`, `--port`       |                   | Port to listen on. Default: `3000`.                                                |
+| `-l`, `--lock-after` |                   | Timeout in seconds before UI auto-locks. `0` disables. Default: `300`.             |
+| `--number-style`     |                   | Number display style: `standard`, `pipe`, `lite`. Default: `standard`.             |
+| `--no-console`       |                   | Run without starting the Console UI.                                               |
+| `--log-file`         | `TOTP_LOG_FILE`   | Optional path to log file.                                                         |
+| `--std-err`          |                   | Output logs to stderr. Usually conflicts with Console UI.                          |
+|                      | `UNLOCK_PASSWORD` | The password used to unlock the interface. If not set, any key will unlock         |
+
 
 ---
 
@@ -80,8 +92,8 @@ The secrets file must be a valid [JSON](https://www.json.org/) document. Each en
 ```json
 [
   {
-    "name": "My GitHub",
-    "secret": "JBSWY3DPEHPK3PXP"
+    "name": "Minimum config",
+    "secret": "ZBSWY3DPEHPK3PXP"
   },
   {
     "name": "Work Email",
@@ -237,16 +249,18 @@ cargo build --release
 - [ ] Change config according to features
 - [ ] Multiple pages when more than 20 items
 - [ ] Vertical layout
-- [ ] Reload configuration feature
+- [X] Reload configuration on the fly
   - [ ] Set configuration path from the interface?
 - [X] Allow the number of digits (for the TOTP) to be optionally set on secrets in the `TOML` file
 - [X] Concurrent CUI and HTTP API
 - [ ] Better Messaging with:
   - [ ] different color for error
   - [ ] disappearing messages
-  - [ ] tab or floating view to see all messages 
+  - [ ] tab or floating view to see all messages
+  - [X] Time
 - [X] Tracing
-  - [ ] Tracing to not interfere with TUI
+  - [X] Tracing to not interfere with TUI
+- [ ] Create config from a Google Authenticator image
 
 ## 📃 License
 
