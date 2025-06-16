@@ -8,6 +8,7 @@ default = ["cli", "http"]
 cli = []
 http = []
 onetime = []
+qr = ["image", "quircs"]
 
 [dependencies]
 clap = { version = "4", features = ["derive", "env"] } # for command-line parsing
@@ -32,3 +33,5 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 tracing-appender = "0.2"
 anyhow = "1.0.98"
 time = { version = "0.3.41", features=["local-offset"]}
+quircs = { version = "0.9" , optional=true}  # Or latest version
+image = {version="0.25" , optional=true} # Required to load image files
