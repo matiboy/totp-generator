@@ -9,5 +9,6 @@ pub async fn one_time_mode(cf: &mut ConfigFile, arg: &str) -> anyhow::Result<Str
     tracing::debug!("{} secrets have been loaded in one time mode ", secrets.len());
     let totp = ConfigFile::get_secret(&secrets, arg)
         .map(|entry| Totp::new(&entry.secret, entry.timestep, entry.digits))?;
-    Ok(format!("{}\nValid until: {}", totp.token, totp.valid_until))
+    let valid_in_seconds = totp.valid_duration();
+    Ok(format!("{}\nValid for {}s", totp.token, valid_in_seconds))
 }

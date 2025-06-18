@@ -1,7 +1,7 @@
-use clap::{ArgAction, Parser, ValueEnum};
+use clap::{ArgAction, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-#[derive(Clone, ValueEnum, PartialEq, Eq)]
+#[derive(Clone, ValueEnum, PartialEq, Eq, Debug)]
 pub enum NumberStyle {
     Standard,
     Pipe,
@@ -9,29 +9,85 @@ pub enum NumberStyle {
     Utf8,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
+#[command(
+    name = "totp-generator",
+    about = "Generate TOTP tokens via CLI, UI, or HTTP API"
+)]
 pub struct Args {
-    #[arg(short, long, env = "TOTP_SECRETS")]
-    pub secrets: String, // mandatory
-    #[arg(short, long)]
-    pub one_time: Option<String>, // optional, can be int or code
-    #[arg(short, long)]
-    pub bind: Option<String>, // optional
-    #[arg(short, long, action=ArgAction::SetTrue)]
-    pub no_console: Option<bool>,
-    #[arg(short, long, default_value = "3000")]
-    pub port: u16, // default to 3000
-    #[arg(
-        short,
-        long,
-        default_value = "300",
-        help = "Time in seconds before locking the user interface; set it to 0 to disable"
-    )]
-    pub lock_after: u16,
-    #[arg(long, value_enum, default_value_t = NumberStyle::Standard, help="One of standard, pipe or lite")]
-    pub number_style: NumberStyle,
-    #[arg(long, env = "TOTP_LOG_FILE", help = "Optional path to log file")]
+    /// Optional path to log file
+    #[arg(long, env = "TOTP_LOG_FILE")]
     pub log_file: Option<PathBuf>,
-    #[arg(long, help="Output logs to stderr; this usually conflicts with the user interface so you likely want to redirect to somewhere e.g. 2> output.log", action=ArgAction::SetTrue)]
-    pub std_err: Option<bool>
+
+    /// Output logs to stderr. May interfere with UI.
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        help = "Log to stderr (may interfere with UI — consider redirecting)"
+    )]
+    pub std_err: bool,
+
+    #[command(subcommand)]
+    pub mode: Mode,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum Origin {
+    GoogleAuthenticator,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Mode {
+    /// Generate a one-time code
+    OneTime {
+        /// The secret name or index to use
+        #[arg(required = true)]
+        target: String,
+
+        /// Path to secrets TOML file
+        #[arg(short, long, env = "TOTP_SECRETS")]
+        secrets: String,
+    },
+
+    /// Run the console UI and/or HTTP interface
+    Interface {
+        /// Path to secrets TOML file
+        #[arg(short, long, env = "TOTP_SECRETS")]
+        secrets: String,
+
+        /// Bind HTTP server to this address (e.g. 127.0.0.1)
+        #[arg(short, long)]
+        bind: Option<String>,
+
+        /// Disable the Console UI
+        #[arg(short, long, action = ArgAction::SetTrue)]
+        no_console: bool,
+
+        /// Port to serve HTTP on (default: 3000)
+        #[arg(short, long, default_value_t = 3000)]
+        port: u16,
+
+        /// Time in seconds before locking UI (0 to disable)
+        #[arg(short, long, default_value_t = 300)]
+        lock_after: u16,
+
+        /// One of: standard, pipe, lite, utf8
+        #[arg(long, value_enum, default_value_t = NumberStyle::Standard)]
+        number_style: NumberStyle,
+    },
+
+    /// Import a secret config from a QR code image
+    Configure {
+        /// Path to an image containing a QR code
+        #[arg(long, value_name = "IMAGE")]
+        from_image: PathBuf,
+
+        /// Prompt for additional details interactively
+        #[arg(long, action = ArgAction::SetTrue)]
+        prompt: bool,
+
+        /// Origin of the QR being loaded
+        #[arg(long, value_enum, default_value_t = Origin::GoogleAuthenticator)]
+        origin: Origin,
+    },
 }

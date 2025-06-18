@@ -1,7 +1,6 @@
 use std::{ops::Deref, sync::Arc, time::SystemTime};
 
-use actix_web::http::header::LAST_MODIFIED;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
@@ -30,6 +29,18 @@ fn default_step() -> u16 {
     30
 }
 
+impl ConfigEntry {
+    pub fn new(name: String, secret: String) -> Self {
+        ConfigEntry {
+            name,
+            code: empty_string(),
+            secret,
+            timestep: default_step(),
+            digits: default_digits(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ConfigData {
     pub entries: Vec<ConfigEntry>,
@@ -46,12 +57,10 @@ impl ConfigFile {
     pub fn new(secrets_path: String) -> Self {
         ConfigFile {
             secrets_path,
-            data: Arc::new(RwLock::new(
-                ConfigData {
-                    entries: Vec::new(),
-                    last_modified: SystemTime::UNIX_EPOCH,
-                },
-            )),
+            data: Arc::new(RwLock::new(ConfigData {
+                entries: Vec::new(),
+                last_modified: SystemTime::UNIX_EPOCH,
+            })),
         }
     }
 
@@ -66,11 +75,12 @@ impl ConfigFile {
         Ok(parsed)
     }
 
-    async fn has_been_modified<T: Deref<Target = ConfigData>>(&self, guard: &T, ) -> Result<bool> {
-            let metadata = fs::metadata(&self.secrets_path).await
-                .with_context(|| format!("Failed to read metadata for {}", self.secrets_path))?;
+    async fn has_been_modified<T: Deref<Target = ConfigData>>(&self, guard: &T) -> Result<bool> {
+        let metadata = fs::metadata(&self.secrets_path)
+            .await
+            .with_context(|| format!("Failed to read metadata for {}", self.secrets_path))?;
         tracing::debug!("Meta data for file {metadata:?}");
-            let metadata_modified = metadata.modified()?;
+        let metadata_modified = metadata.modified()?;
         Ok(guard.last_modified < metadata_modified)
     }
 
@@ -97,7 +107,7 @@ impl ConfigFile {
             // lock this time
             if self.has_been_modified(&data).await? {
                 data.last_modified = SystemTime::now();
-            data.entries = entries;
+                data.entries = entries;
                 has_been_modified = true;
             } else {
                 has_been_modified = false;
