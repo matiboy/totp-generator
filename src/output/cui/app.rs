@@ -190,7 +190,7 @@ impl App {
         }
         for (i, entry) in secrets.iter().enumerate() {
             if let Some(existing) = self.totps.get_mut(i) {
-                if entry.code != existing.code {
+                if entry.handle != existing.code {
                     self.totps[i] = TotpBox::from(entry);
                     has_changed = true;
                 } else if existing.needs_refresh() {

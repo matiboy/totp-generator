@@ -28,7 +28,7 @@ impl From<&ConfigEntry> for TotpBox {
         let totp = Totp::new(entry.secret.as_str(), entry.timestep, entry.digits);
         TotpBox {
             name: entry.name.clone(),
-            code: entry.code.clone(),
+            code: entry.handle.clone(),
             digits: entry.digits,
             secret: entry.secret.clone(),
             timestep: entry.timestep,

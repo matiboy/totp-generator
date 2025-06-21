@@ -8,13 +8,31 @@ use tokio::{fs, sync::RwLock};
 pub struct ConfigEntry {
     pub name: String,
     #[serde(default = "empty_string")]
-    pub code: String,
-    #[serde(skip_serializing)]
+    pub handle: String,
     pub secret: String,
     #[serde(default = "default_step")]
     pub timestep: u16,
-    #[serde(default = "default_digits", skip_serializing)]
+    #[serde(default = "default_digits")]
     pub digits: u8,
+}
+
+#[derive(Serialize)]
+pub struct ConfigEntryPublic<'a> {
+    pub name: &'a str,
+    pub code: &'a str,
+    pub timestep: u16,
+    pub digits: u8,
+}
+
+impl<'a> From<&'a ConfigEntry> for ConfigEntryPublic<'a> {
+    fn from(entry: &'a ConfigEntry) -> Self {
+        ConfigEntryPublic {
+            name: &entry.name,
+            code: &entry.handle,
+            timestep: entry.timestep,
+            digits: entry.digits,
+        }
+    }
 }
 
 fn default_digits() -> u8 {
@@ -33,7 +51,7 @@ impl ConfigEntry {
     pub fn new(name: String, secret: String) -> Self {
         ConfigEntry {
             name,
-            code: empty_string(),
+            handle: empty_string(),
             secret,
             timestep: default_step(),
             digits: default_digits(),
@@ -116,11 +134,11 @@ impl ConfigFile {
         Ok((has_been_modified, self.data.read().await.entries.clone()))
     }
 
-    pub fn get_secret(secrets: &Vec<ConfigEntry>, arg: &str) -> Result<ConfigEntry> {
+    pub fn get_secret(secrets: &[ConfigEntry], arg: &str) -> Result<ConfigEntry> {
         let entry = if let Ok(index) = arg.parse::<usize>() {
             secrets.get(index).cloned()
         } else {
-            secrets.iter().find(|e| e.code == arg).cloned()
+            secrets.iter().find(|e| e.handle == arg).cloned()
         };
         entry.ok_or(anyhow!("Entry not found"))
     }

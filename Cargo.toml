@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["cli", "http"]
+default = ["cli", "http", "onetime", "configure"]
 cli = []
 http = []
 onetime = []

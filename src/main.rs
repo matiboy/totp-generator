@@ -1,6 +1,7 @@
 mod config;
 mod logging;
 mod output;
+#[cfg(feature = "configure")]
 mod qr;
 mod state;
 mod totp;
@@ -100,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
                         });
                     });
                     set.spawn(async move {
-                        http_shutdown_rx.await;
+                        let _ = http_shutdown_rx.await;
                         println!("Received request to shutdown HTTP server via oneshot channel")
                     });
                 }
@@ -129,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
                         number_style,
                     );
                     set.spawn(async move {
-                        start_console_ui(state).await;
+                        let _ = start_console_ui(state).await;
                     });
                 }
             }
@@ -185,7 +186,7 @@ async fn main() -> anyhow::Result<()> {
                             if code == "-" {
                                 return None; // skip this entry
                             } else {
-                                entry.code = code.to_owned();
+                                entry.handle = code.to_owned();
                             }
                         }
 

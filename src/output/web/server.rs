@@ -1,27 +1,29 @@
-use crate::{config::secrets::ConfigFile, totp::Totp};
+use crate::{
+    config::secrets::{ConfigEntryPublic, ConfigFile},
+    totp::Totp,
+};
 use actix_web::{
-    get,
-    http::header::{self, Accept},
-    mime, web, App, HttpResponse, HttpResponseBuilder, HttpServer, Responder,
+    App, HttpResponse, HttpResponseBuilder, HttpServer, Responder, get,
+    http::header::{self, Accept, ContentType},
+    mime, web,
 };
 use std::sync::Arc;
 
 #[cfg(feature = "http")]
 #[get("/list")]
 async fn list_entries(secrets_cf: web::Data<Arc<ConfigFile>>) -> impl Responder {
-    use actix_web::http::header::ContentType;
-
-    let result : anyhow::Result<String> = async {
+    let result: anyhow::Result<String> = async {
         let (_, secrets) = secrets_cf.load().await?;
+        // Convert secrets to their public representation
+        let secrets: Vec<ConfigEntryPublic> = secrets.iter().map(|entry| entry.into()).collect();
         let as_string = serde_json::to_string(&secrets)?;
         Ok(as_string)
-    }.await;
+    }
+    .await;
     match result {
-        Ok(secrets) => {
-            HttpResponse::Ok()
-                .content_type(ContentType::json())
-                .body(secrets)
-        }
+        Ok(secrets) => HttpResponse::Ok()
+            .content_type(ContentType::json())
+            .body(secrets),
         Err(err) => {
             tracing::error!("Failed to load secrets: {}", err);
             HttpResponse::BadRequest().body("Failed to load secrets")
@@ -53,9 +55,10 @@ async fn get_code(
     let result: anyhow::Result<Totp> = async {
         let (_, secrets) = secrets_cf.load().await?;
         let entry = ConfigFile::get_secret(&secrets, code.as_str())?;
-            let totp = Totp::new(entry.secret.as_str(), entry.timestep, entry.digits);
-            Ok(totp)
-    }.await;
+        let totp = Totp::new(entry.secret.as_str(), entry.timestep, entry.digits);
+        Ok(totp)
+    }
+    .await;
 
     match result {
         Ok(totp) => {

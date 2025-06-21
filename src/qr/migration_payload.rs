@@ -1,4 +1,4 @@
-use base64::engine::Config;
+use base32::{Alphabet, encode};
 
 use crate::config::secrets::ConfigEntry;
 
@@ -36,9 +36,7 @@ pub struct OtpParameters {
 
 impl From<OtpParameters> for ConfigEntry {
     fn from(param: OtpParameters) -> Self {
-        ConfigEntry::new(
-            param.name,
-            String::from_utf8(param.secret).unwrap_or_default(),
-        )
+        let secret = encode(Alphabet::RFC4648 { padding: false }, &param.secret);
+        ConfigEntry::new(param.name, secret)
     }
 }
