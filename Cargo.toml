@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["cli", "http", "onetime", "configure"]
+default = ["cli", "http", "onetime"]
 cli = []
 http = []
 onetime = []
-configure = ["image", "rqrr", "url", "prost", "base64"]
+configure = ["image", "rqrr", "url", "prost", "base64", "libloading"]
 
 [dependencies]
 clap = { version = "4", features = ["derive", "env"] } # for command-line parsing
@@ -38,3 +38,7 @@ image = {version="0.25" , optional=true} # Required to load image files
 prost = { version="0.12", optional=true}
 base64 = { version="0.22", optional=true}
 url = { version="2", optional=true}
+libloading = {version="0.8", optional=true}
+
+[build-dependencies]
+bindgen = "0.69"

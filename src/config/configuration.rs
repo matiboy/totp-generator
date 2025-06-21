@@ -51,7 +51,7 @@ pub enum Mode {
 
     /// Run the console UI and/or HTTP interface
     Interface {
-        /// Path to secrets TOML file
+        /// Path to secrets JSON file
         #[arg(short, long, env = "TOTP_SECRETS")]
         secrets: String,
 
@@ -85,6 +85,10 @@ pub enum Mode {
         /// Prompt for additional details interactively
         #[arg(long, action = ArgAction::SetTrue)]
         prompt: bool,
+
+        /// Flag to use the zbar C library
+        #[arg(long, action = ArgAction::SetTrue)]
+        use_zbar: bool,
 
         /// Origin of the QR being loaded
         #[arg(long, value_enum, default_value_t = Origin::GoogleAuthenticator)]

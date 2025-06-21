@@ -4,13 +4,13 @@
     "secret": "THESECRETHERE"
   },
   {
-    "name": "Entry addressable by 'code'",
-    "code": "gh",
+    "name": "Entry addressable by 'handle'",
+    "handle": "gh",
     "secret": "ABCDEFGH"
   },
   {
     "name": "Full entry with custom digits and timer",
-    "code": "dd",
+    "handle": "dd",
     "secret": "OOOKKKKK",
     "digits": 8,
     "timestep": 60

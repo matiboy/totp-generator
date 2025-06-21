@@ -1,15 +1,13 @@
 mod config;
 mod logging;
 mod output;
-#[cfg(feature = "configure")]
 mod qr;
 mod state;
 mod totp;
 
-use std::io::Write as _;
 use std::sync::Arc;
 use std::thread;
-use std::{env, io};
+use std::env;
 
 use clap::Parser;
 use config::secrets::ConfigEntry;
@@ -25,11 +23,12 @@ use output::web::server::start_server;
 use output::cui::console::start_console_ui;
 
 #[cfg(feature = "configure")]
-use qr::reader::QrDecoder;
+use qr::prompt::generate_configuration;
 
 use state::State;
 use tokio::sync::oneshot;
 use tokio::{signal, task::JoinSet};
+use anyhow::Context as _;
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
@@ -158,43 +157,13 @@ async fn main() -> anyhow::Result<()> {
             from_image,
             prompt,
             origin,
+            use_zbar,
         } => {
             #[cfg(feature = "configure")]
             {
-                let content = QrDecoder::decode_from_file(from_image).await?;
-                let entries = match origin {
-                    config::configuration::Origin::GoogleAuthenticator => {
-                        QrDecoder::parse_google_auth_export(&content)?
-                    }
-                };
-                let config_entries: Vec<ConfigEntry> = entries
-                    .into_iter()
-                    .filter_map(|e| {
-                        let name = e.name.clone();
-                        let mut entry = ConfigEntry::from(e);
-                        if prompt {
-                            print!(
-                                "Enter code for {} (or `-` to not include into config): ",
-                                name
-                            );
-                            io::stdout().flush().ok()?;
-
-                            let mut input = String::new();
-                            io::stdin().read_line(&mut input).ok()?;
-                            let code = input.trim();
-
-                            if code == "-" {
-                                return None; // skip this entry
-                            } else {
-                                entry.handle = code.to_owned();
-                            }
-                        }
-
-                        Some(entry)
-                    })
-                    .collect();
-                println!("{}", serde_json::to_string_pretty(&config_entries)?);
-                Ok(())
+                generate_configuration(from_image, prompt, origin, use_zbar)
+                    .await
+                    .context("Failed to generate configuration from QR code")
             }
             #[cfg(not(feature = "configure"))]
             {

@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
+use base64::Engine as _;
 
 use image::{DynamicImage, GrayImage};
 #[cfg(feature = "configure")]
@@ -13,7 +13,7 @@ use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use url::Url;
 
-use super::migration_payload::{MigrationPayload, OtpParameters};
+use super::{migration_payload::{MigrationPayload, OtpParameters}, zbar};
 
 pub struct QrDecoder;
 // Example URI:
@@ -28,6 +28,7 @@ impl QrDecoder {
             .find(|(k, _)| k == "data")
             .map(|(_, v)| v.into_owned())
             .context("Missing `data` query parameter")?;
+        tracing::debug!("Base64 data: {data}");
         let decoded = STANDARD.decode(data).context("Base64 decode failed")?;
         let payload = MigrationPayload::decode(decoded.as_slice())
             .context("Failed to parse protobuf payload")?;
@@ -35,7 +36,7 @@ impl QrDecoder {
         let entries = payload.otp_parameters.into_iter().collect();
         Ok(entries)
     }
-    pub async fn decode_from_file(path: PathBuf) -> Result<String> {
+    pub async fn decode_from_file(path: PathBuf, use_zbar: bool) -> Result<String> {
         // Async read file into memory
         let p = path.clone();
         let mut file = File::open(path)
@@ -50,21 +51,29 @@ impl QrDecoder {
         // Decode image
         let img = image::load_from_memory(&buffer).context("Failed to decode image from memory")?;
 
-        Self::decode_image(&img)
+        Self::decode_image(&img, use_zbar).context("Failed to decode QR code from image")
     }
 
-    fn decode_image(img: &DynamicImage) -> Result<String> {
+    fn decode_image(img: &DynamicImage, use_zbar: bool) -> Result<String> {
         let gray: GrayImage = img.to_luma8();
 
-        let mut img = PreparedImage::prepare(gray);
-        let grids = img.detect_grids();
+        if use_zbar {
+            // Use zbar for decoding
+            let content = zbar::scan_qr_from_image(&gray)
+                .context("Failed to read QR with Zbar")?;
 
-        if grids.is_empty() {
-            anyhow::bail!("No QR codes found");
+            Ok(content)
+        } else {
+            let mut img = PreparedImage::prepare(gray);
+            let grids = img.detect_grids();
+
+            if grids.is_empty() {
+                anyhow::bail!("No QR codes found");
+            }
+
+            let (_, content) = grids[0].decode().context("Failed to decode QR content")?;
+
+            Ok(content)
         }
-
-        let (_, content) = grids[0].decode().context("Failed to decode QR content")?;
-
-        Ok(content)
     }
 }
