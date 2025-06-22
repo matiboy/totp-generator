@@ -10,7 +10,6 @@ use std::thread;
 use std::env;
 
 use clap::Parser;
-use config::secrets::ConfigEntry;
 use config::{configuration::Args, secrets::ConfigFile};
 
 #[cfg(feature = "onetime")]
@@ -28,7 +27,6 @@ use qr::prompt::generate_configuration;
 use state::State;
 use tokio::sync::oneshot;
 use tokio::{signal, task::JoinSet};
-use anyhow::Context as _;
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
@@ -163,14 +161,12 @@ async fn main() -> anyhow::Result<()> {
             {
                 generate_configuration(from_image, prompt, origin, use_zbar)
                     .await
-                    .context("Failed to generate configuration from QR code")
             }
             #[cfg(not(feature = "configure"))]
             {
+                let _ = ( from_image, prompt, origin, use_zbar ); // This is to avoid unused
+                                                                  // variable warnings
                 tracing::warn!(
-                    "Configuration mode is not enabled in this build. Please enable the 'configure' feature to use it."
-                );
-                eprintln!(
                     "Configuration mode is not enabled in this build. Please enable the 'configure' feature to use it."
                 );
                 Err(anyhow::anyhow!(

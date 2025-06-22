@@ -47,6 +47,7 @@ fn default_step() -> u16 {
     30
 }
 
+#[cfg(feature = "configure")]
 impl ConfigEntry {
     pub fn new(name: String, secret: String) -> Self {
         ConfigEntry {
